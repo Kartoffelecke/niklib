@@ -1,0 +1,16 @@
+import numpy as np
+import tifffile
+
+from niklib.image_tools import extract_channels
+
+
+def test_extract_channels(tmp_path):
+    img = np.random.rand(3, 10, 10)
+
+    path = tmp_path / "test.tif"
+
+    tifffile.imwrite(path, img)
+
+    result = extract_channels(path, [0, 2])
+
+    assert result.shape == (2, 10, 10)
