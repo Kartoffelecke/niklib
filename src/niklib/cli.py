@@ -17,9 +17,19 @@ def extract_channels(
     for filename in filenames[1:]:
         print(f"{filename=}")
         extracted_image = image_tools.extract_channels(filename, channels)
-        image_tools.imwrite(outdir / Path(filename.stem+"_extracted.tif"),extracted_image)
+        image_tools.imwrite(outdir / Path(f"{filename.stem}_ch{','.join(map(str, channels))}.tif"),extracted_image)
 
-        
+
+@app.command()
+def rescale_intensity(
+        filenames: list[Path],
+        ):
+    image_tools.rescale_intensity(filenames)
+
+@app.command()
+def lif_to_tif(input:Path, output:Path):
+    image_tools.lif_to_tif(input, output)
+
 
 #@app.command()
 #def rescale_intensity(filenames, channel, method):
