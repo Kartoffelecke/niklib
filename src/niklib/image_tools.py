@@ -41,10 +41,16 @@ def lif_to_tif(input_file:Path, output_dir:Path, ):
     img_names = [x["name"] for x in lif.image_list]
     os.makedirs(output_dir, exist_ok=True)
     for img_name in img_names:
-        cur_img = np.array(
-            list(lif.get_image_by_name(img_name).get_iter_c(0, 0))
+        lif_img = lif.get_image_by_name(img_name)
+        cur_img = np.array(list(lif_img.get_iter_c(0, 0)))  # (C, Y, X)
+        sx, sy = lif_img.scale[0], lif_img.scale[1]  # px/µm
+        tifffile.imwrite(
+            output_dir/f"{img_name}.tif",
+            cur_img,
+            imagej=True,
+            resolution=(sx, sy),
+            metadata={"axes": "CYX", "unit": "um"},
         )
-        tifffile.imwrite(output_dir/f"{img_name}.tif",cur_img,imagej=True)
 
 
 if __name__ == "__main__":
