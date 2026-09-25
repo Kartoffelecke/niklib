@@ -271,15 +271,16 @@ def _render(plane:np.ndarray, layer, cmap) -> np.ndarray:
         return np.repeat((1 - v)[..., None], 3, axis=-1)
     return cmap.map(v.ravel())[:, :3].reshape(*v.shape, 3)
 
-def _burn_scalebar(rgb:np.ndarray, bar_px:int) -> np.ndarray:
-    """ black bar on a white box in the bottom-right corner, no text"""
+def _burn_scalebar(rgb:np.ndarray, bar_px:int, bg_opacity:float = 0.8) -> np.ndarray:
+    """ black bar on a semi-transparent white box in the bottom-right corner, no text"""
     h, w = rgb.shape[:2]
     t = max(3, round(0.012 * min(h, w)))  # bar thickness, also padding
     box_h, box_w = 3 * t, bar_px + 2 * t
     if box_h > h or box_w > w:
         raise ValueError(f"scale bar ({bar_px} px) does not fit into the {w} px wide image")
     out = rgb.copy()
-    out[h - box_h:, w - box_w:] = 1
+    box = out[h - box_h:, w - box_w:]
+    out[h - box_h:, w - box_w:] = bg_opacity + (1 - bg_opacity) * box
     out[h - 2 * t:h - t, w - t - bar_px:w - t] = 0
     return out
 
