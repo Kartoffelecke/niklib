@@ -5,6 +5,7 @@ import numpy as np
 import skimage as sk
 from readlif.reader import LifFile
 import os
+import warnings
 
 def main():
     print("script ran directly")
@@ -35,10 +36,6 @@ def adjust_exposure(
             imgs[:,ch,:,:], in_range=(low,high), out_range="dtype"
         )
     return imgs
-    
-
-    
-
 def lif_to_tif(input_file:Path, output_dir:Path, ):
     lif = LifFile(input_file)
     img_names = [x["name"] for x in lif.image_list]
