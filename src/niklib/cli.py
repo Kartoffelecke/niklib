@@ -30,6 +30,15 @@ def rescale_intensity(
 def lif_to_tif(input:Path, output:Path):
     image_tools.lif_to_tif(input, output)
 
+@app.command()
+def napari_load_tif(filenames: list[Path]):
+    """open tifs in one napari window with their µm scaling applied"""
+    import napari
+    viewer = None
+    for filename in filenames:
+        viewer = image_tools.napari_load_tif(filename, viewer=viewer)
+    napari.run()
+
 
 #@app.command()
 #def rescale_intensity(filenames, channel, method):
