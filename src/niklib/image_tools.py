@@ -196,6 +196,45 @@ def napari_load_tif(
     viewer.scale_bar.unit = "um"
     return viewer
 
+def napari_crop(viewer, layers=None):
+    """ crop image layers (default: all, i.e. every channel) in place to the selected
+    rectangle of the active shapes layer (or the topmost one). the cropped image
+    keeps its position, rotated shapes are cropped to their bounding box"""
+    from napari.layers import Image, Shapes
+
+    shapes = viewer.layers.selection.active
+    if not isinstance(shapes, Shapes):
+        shapes = next((l for l in reversed(viewer.layers) if isinstance(l, Shapes)), None)
+    if shapes is None:
+        raise ValueError("draw a rectangle in a shapes layer first")
+    selected = list(shapes.selected_data) or ([0] if len(shapes.data) == 1 else [])
+    if len(selected) != 1:
+        raise ValueError(f"select exactly one rectangle in '{shapes.name}'")
+    corners = [np.asarray(shapes.data_to_world(v)) for v in shapes.data[selected[0]]]
+
+    if layers is None:
+        layers = [l for l in viewer.layers if isinstance(l, Image)]
+    for layer in layers:
+        # rectangle corners in the layer's pixel coordinates, only Y and X are cropped
+        yx = np.array([
+            layer.world_to_data(np.pad(c, (max(layer.ndim - len(c), 0), 0)))[-2:]
+            for c in corners
+        ])
+        shape = np.array(layer.data.shape[-3:-1] if layer.rgb else layer.data.shape[-2:])
+        start = np.clip(np.floor(yx.min(0)).astype(int), 0, shape)
+        stop = np.clip(np.ceil(yx.max(0)).astype(int), 0, shape)
+        if np.any(stop <= start):
+            warnings.warn(f"rectangle does not overlap '{layer.name}', not cropped")
+            continue
+        crop = (slice(start[0], stop[0]), slice(start[1], stop[1]))
+        if layer.rgb:
+            crop = crop + (slice(None),)
+        translate = np.array(layer.translate, dtype=float)
+        translate[-2:] += start * np.asarray(layer.scale)[-2:]
+        layer.data = layer.data[(Ellipsis, *crop)]
+        layer.translate = translate
+    return layers
+
 
 if __name__ == "__main__":
     main()
