@@ -9,6 +9,9 @@ authors = [
 requires-python = ">=3.12"
 dependencies = ["tifffile", "typer", "scikit-image","readlif"]
 
+[project.optional-dependencies]
+napari = ["napari[all]"]
+
 [project.scripts]
 niklib = "niklib.cli:app"
 

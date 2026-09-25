@@ -52,6 +52,41 @@ def lif_to_tif(input_file:Path, output_dir:Path, ):
             metadata={"axes": "CYX", "unit": "um"},
         )
 
+def napari_load_tif(path:Path, viewer=None):
+    """ open a tif in napari with its physical pixel size (µm) applied as scale"""
+    import napari
+
+    path = Path(path)
+    with tifffile.TiffFile(path) as tif:
+        data = tif.asarray()
+        axes = tif.series[0].axes
+        ij = tif.imagej_metadata or {}
+        tags = tif.pages[0].tags
+        # µm per ResolutionUnit; ImageJ tifs use NONE and store the unit in metadata
+        unit_to_um = {2: 25400.0, 3: 10000.0}.get(
+            tags["ResolutionUnit"].value if "ResolutionUnit" in tags else 1, 1.0
+        )
+
+        def px_size(tag):
+            if tag not in tags:
+                return 1.0
+            num, den = tags[tag].value
+            return den / num * unit_to_um
+
+        sizes = {"X": px_size("XResolution"), "Y": px_size("YResolution"),
+                 "Z": ij.get("spacing", 1.0)}
+        if unit_to_um == 1.0 and ij.get("unit") not in ("um", "micron", "µm", "\\u00B5m"):
+            warnings.warn(f"{path.name}: no µm scale found, pixel sizes may be wrong")
+
+    if viewer is None:
+        viewer = napari.Viewer()
+    channel_axis = axes.index("C") if "C" in axes else None
+    scale = [sizes.get(a, 1.0) for a in axes if a != "C"]
+    viewer.add_image(data, channel_axis=channel_axis, scale=scale, name=path.stem)
+    viewer.scale_bar.visible = True
+    viewer.scale_bar.unit = "um"
+    return viewer
+
 
 if __name__ == "__main__":
     main()
