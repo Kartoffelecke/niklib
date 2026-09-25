@@ -31,12 +31,24 @@ def lif_to_tif(input:Path, output:Path):
     image_tools.lif_to_tif(input, output)
 
 @app.command()
-def napari_load_tif(filenames: list[Path]):
-    """open tifs in one napari window with their µm scaling applied"""
+def napari_load_tif(
+        filenames: list[Path],
+        names: Annotated[
+            str | None, typer.Option(help="comma separated channel names, e.g. DAPI,GFP")
+        ] = None,
+        colors: Annotated[
+            str | None, typer.Option(help="comma separated channel colors, e.g. blue,green")
+        ] = None,
+    ):
+    """open tifs in one napari window with their µm scaling, channel names and colors applied"""
     import napari
+    names = [x.strip() for x in names.split(",")] if names else None
+    colors = [x.strip() for x in colors.split(",")] if colors else None
     viewer = None
     for filename in filenames:
-        viewer = image_tools.napari_load_tif(filename, viewer=viewer)
+        viewer = image_tools.napari_load_tif(
+            filename, viewer=viewer, names=names, colors=colors
+        )
     napari.run()
 
 
