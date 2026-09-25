@@ -37,20 +37,67 @@ def adjust_exposure(
             imgs[:,ch,:,:], in_range=(low,high), out_range="dtype"
         )
     return imgs
+LUT_RGB = {
+    "red": (1, 0, 0), "green": (0, 1, 0), "blue": (0, 0, 1), "cyan": (0, 1, 1),
+    "magenta": (1, 0, 1), "yellow": (1, 1, 0), "gray": (1, 1, 1), "grey": (1, 1, 1),
+}
+
+def _lif_channel_info(element, n_ch:int):
+    """ channel names (dye names, confocal only) and LUT color names of a .lif image
+    element, None where missing"""
+    colors = [
+        c.get("LUTName", "").lower() or None for c in
+        element.findall("./Data/Image/ImageDescription/Channels/ChannelDescription")
+    ]
+    # sequential scans: every sequence adds its active detectors as channels, in order
+    attachment = "./Data/Image/Attachment/"
+    settings = (
+        element.findall(attachment + "LDM_Block_Sequential/LDM_Block_Sequential_List/ATLConfocalSettingDefinition")
+        or element.findall(attachment + "ATLConfocalSettingDefinition")
+    )
+    names = []
+    for setting in settings:
+        dyes = {b.get("Channel"): b.get("DyeName", "") for b in setting.findall("./Spectro/MultiBand")}
+        for det in setting.findall("./DetectorList/Detector"):
+            if det.get("IsActive") == "1":
+                dye = dyes.get(det.get("Channel"), "").split("/")[-1]  # "Leica/DAPI" -> "DAPI"
+                names.append(dye or det.get("Name"))
+    if len(names) != n_ch:
+        names = [None] * n_ch
+    if len(colors) != n_ch:
+        colors = [None] * n_ch
+    return names, colors
+
+def _lut(color:str | None) -> np.ndarray:
+    """ ImageJ LUT (3, 256) uint8 ramping from black to `color`"""
+    rgb = LUT_RGB.get(color, (1, 1, 1))
+    return (np.outer(rgb, np.arange(256))).astype(np.uint8)
+
 def lif_to_tif(input_file:Path, output_dir:Path, ):
     lif = LifFile(input_file)
-    img_names = [x["name"] for x in lif.image_list]
+    # readlif doesn't expose channel names/colors, get them from the xml header
+    elements = [e for e in lif.xml_root.iter("Element") if e.find("./Data/Image") is not None]
+    if [e.get("Name") for e in elements] != [x["name"].split("/")[-1] for x in lif.image_list]:
+        warnings.warn(f"{input_file}: could not match images to xml, skipping channel names/colors")
+        elements = [None] * len(lif.image_list)
     os.makedirs(output_dir, exist_ok=True)
-    for img_name in img_names:
-        lif_img = lif.get_image_by_name(img_name)
+    for i, element in enumerate(elements):
+        lif_img = lif.get_image(i)
         cur_img = np.array(list(lif_img.get_iter_c(0, 0)))  # (C, Y, X)
         sx, sy = lif_img.scale[0], lif_img.scale[1]  # px/µm
+        metadata = {"axes": "CYX", "unit": "um", "mode": "composite"}
+        if element is not None:
+            names, colors = _lif_channel_info(element, cur_img.shape[0])
+            if all(names):
+                metadata["Labels"] = names
+            if any(colors):
+                metadata["LUTs"] = [_lut(c) for c in colors]
         tifffile.imwrite(
-            output_dir/f"{img_name}.tif",
+            output_dir/f"{lif_img.name}.tif",
             cur_img,
             imagej=True,
             resolution=(sx, sy),
-            metadata={"axes": "CYX", "unit": "um"},
+            metadata=metadata,
         )
 
 def _tif_channel_info(tif:tifffile.TiffFile, n_ch:int):
